@@ -77,3 +77,5 @@ Top 5 Career Recommendations:
 
 Missing Technical Skills: ['numpy']
 Missing Soft Skills: ['critical thinking']
+
+---
