@@ -34,12 +34,10 @@ st.markdown("""
 }
 .chip {
     display: inline-block;
-    margin: 6px 6px 6px 0;
-    padding: 4px 10px;
+    padding: 6px 12px;
     border: 1px solid #888;
     border-radius: 6px;
-    font-size: 15px;
-    color: #E0E0E0;
+    font-size: 14px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -50,9 +48,58 @@ st.write("Upload your resume to get career recommendations")
 
 # ===================== TAG FUNCTION =====================
 def create_tags(skills):
-    if skills == ["None"] or skills == "None":
+    if skills == ["None"]:
         return "<span class='text'>None</span>"
     return " ".join([f"<span class='chip'>{skill}</span>" for skill in skills])
+
+# ===================== FINAL HEADER-STRIP BOX UI =====================
+def show_learning_section(skills, title):
+    st.markdown(f"""
+    <div class="card">
+        <span class="title">{title}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if skills == ["None"]:
+        st.markdown("<span class='text'>None</span>", unsafe_allow_html=True)
+        return
+
+    for skill in skills:
+        yt_query = skill.replace(" ", "+") + "+course+tutorial"
+        yt_link = f"https://www.youtube.com/results?search_query={yt_query}"
+
+        free_link = f"https://www.google.com/search?q={skill.replace(' ','+')}+free+course"
+
+        # 🔥 SKILL BOX WITH HEADER STRIP
+        st.markdown(f"""
+        <div style="
+            background-color:#1A1D24;
+            border-radius:10px;
+            margin-bottom:15px;
+            border:1px solid #333;
+            overflow:hidden;
+        ">
+            <div style="
+                background:linear-gradient(90deg,#2A2F3A,#1E1E1E);
+                padding:10px 15px;
+                font-size:15px;
+                font-weight:600;
+                color:#FFFFFF;
+                text-transform:capitalize;
+            ">
+                {skill}
+            </div>
+        """, unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.link_button("▶️ YouTube", yt_link, use_container_width=True)
+
+        with col2:
+            st.link_button("📘 Free Course", free_link, use_container_width=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ===================== SKILLS =====================
 technical_skills = list(set([
@@ -154,14 +201,12 @@ def extract_skills(text, skill_list):
     text = text.lower()
     found = []
     for skill in skill_list:
-        pattern = r'\b' + re.escape(skill.lower()) + r'\b'
-        if re.search(pattern, text):
+        if re.search(r'\b' + re.escape(skill) + r'\b', text):
             found.append(skill)
     return found or ["None"]
 
-def get_missing_skills(required_skills, found_skills):
-    missing = [s for s in required_skills if s not in found_skills]
-    return missing or ["None"]
+def get_missing_skills(required, found):
+    return [s for s in required if s not in found] or ["None"]
 
 # ===================== FILE UPLOAD =====================
 uploaded_file = st.file_uploader("Upload Resume", type=["pdf","docx","txt"])
@@ -171,83 +216,44 @@ if uploaded_file:
         time.sleep(1)
 
     resume_text = ""
+
     if uploaded_file.name.endswith(".pdf"):
-        pdf_reader = PyPDF2.PdfReader(uploaded_file)
-        for page in pdf_reader.pages:
-            text = page.extract_text()
-            if text:
-                resume_text += text + " "
+        reader = PyPDF2.PdfReader(uploaded_file)
+        for page in reader.pages:
+            txt = page.extract_text()
+            if txt:
+                resume_text += txt
     elif uploaded_file.name.endswith(".docx"):
         doc = docx.Document(uploaded_file)
         for para in doc.paragraphs:
-            resume_text += para.text + " "
+            resume_text += para.text
     else:
         resume_text = uploaded_file.read().decode("utf-8")
 
     words = resume_text.split()
     name = (words[0] + " " + words[1]).title() if len(words) >= 2 else "Not Found"
 
-    found_technical = extract_skills(resume_text, technical_skills)
+    found_tech = extract_skills(resume_text, technical_skills)
     found_soft = extract_skills(resume_text, soft_skills)
 
-    # ===================== PREDICT =====================
-    user_skills_text = " ".join(found_technical)
-    vector = vectorizer.transform([user_skills_text])
+    vector = vectorizer.transform([" ".join(found_tech)])
     probs = model.predict_proba(vector)[0]
+
     careers = model.classes_
-    career_scores = sorted(zip(careers, probs), key=lambda x: x[1], reverse=True)
-    top_5_careers = career_scores[:5]
-    top_career = top_5_careers[0][0]
+    top_5 = sorted(zip(careers, probs), key=lambda x: x[1], reverse=True)[:5]
+    top_career = top_5[0][0]
 
-    # ===================== MISSING SKILLS =====================
-    req_tech = career_required_skills.get(top_career, [])
-    missing_technical = get_missing_skills(req_tech, found_technical)
+    missing_tech = get_missing_skills(career_required_skills.get(top_career, []), found_tech)
+    missing_soft = get_missing_skills(career_soft_skills.get(top_career, []), found_soft)
 
-    req_soft = career_soft_skills.get(top_career, [])
-    missing_soft = get_missing_skills(req_soft, found_soft)
-
-    # ===================== OUTPUT =====================
     st.markdown("## Analysis Report")
 
-    st.markdown(f"""
-    <div class="card">
-    <span class="title">Name:</span><br>
-    <span class="text">{name}</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"<div class='card'><span class='title'>Name:</span><br><span class='text'>{name}</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='card'><span class='title'>Technical Skills:</span><br>{create_tags(found_tech)}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='card'><span class='title'>Soft Skills:</span><br>{create_tags(found_soft)}</div>", unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div class="card">
-    <span class="title">Technical Skills detected:</span><br>
-    {create_tags(found_technical)}
-    </div>
-    """, unsafe_allow_html=True)
+    career_list = "<br>".join([f"- {c}" for c,_ in top_5])
+    st.markdown(f"<div class='card'><span class='title'>Top Careers:</span><br><span class='text'>{career_list}</span></div>", unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div class="card">
-    <span class="title">Soft Skills detected:</span><br>
-    {create_tags(found_soft)}
-    </div>
-    """, unsafe_allow_html=True)
-
-    career_list = "<br>".join([f"- {c}" for c, _ in top_5_careers])
-    st.markdown(f"""
-    <div class="card">
-    <span class="title">Top Career Recommendations:</span><br>
-    <span class="text">{career_list}</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown(f"""
-    <div class="card">
-    <span class="title">Missing Technical Skills:</span><br>
-    {create_tags(missing_technical)}
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown(f"""
-    <div class="card">
-    <span class="title">Missing Soft Skills:</span><br>
-    {create_tags(missing_soft)}
-    </div>
-    """, unsafe_allow_html=True)
+    show_learning_section(missing_tech, "Missing Technical Skills")
+    show_learning_section(missing_soft, "Missing Soft Skills")
