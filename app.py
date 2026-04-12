@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import PyPDF2
 import docx
@@ -38,6 +39,7 @@ st.markdown("""
     border: 1px solid #888;
     border-radius: 6px;
     font-size: 14px;
+    margin: 3px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -52,7 +54,29 @@ def create_tags(skills):
         return "<span class='text'>None</span>"
     return " ".join([f"<span class='chip'>{skill}</span>" for skill in skills])
 
-# ===================== FINAL HEADER-STRIP BOX UI =====================
+# ===================== ATS SCORE FUNCTION =====================
+def calculate_ats_score(found_tech, found_soft, resume_text):
+    tech_count = 0 if found_tech == ["None"] else len(found_tech)
+    soft_count = 0 if found_soft == ["None"] else len(found_soft)
+
+    tech_score = min(tech_count * 6, 60)
+    soft_score = min(soft_count * 4, 20)
+
+    quality_score = 0
+    text_lower = resume_text.lower()
+
+    if len(resume_text.split()) >= 250:
+        quality_score += 5
+    if re.search(r'project', text_lower):
+        quality_score += 5
+    if re.search(r'internship|experience', text_lower):
+        quality_score += 5
+    if re.search(r'education', text_lower):
+        quality_score += 5
+
+    return min(tech_score + soft_score + quality_score, 100)
+
+# ===================== LEARNING SECTION =====================
 def show_learning_section(skills, title):
     st.markdown(f"""
     <div class="card">
@@ -67,10 +91,8 @@ def show_learning_section(skills, title):
     for skill in skills:
         yt_query = skill.replace(" ", "+") + "+course+tutorial"
         yt_link = f"https://www.youtube.com/results?search_query={yt_query}"
-
         free_link = f"https://www.google.com/search?q={skill.replace(' ','+')}+free+course"
 
-        # 🔥 SKILL BOX WITH HEADER STRIP
         st.markdown(f"""
         <div style="
             background-color:#1A1D24;
@@ -159,7 +181,6 @@ X = vectorizer.fit_transform(df["skills"])
 model = LogisticRegression(max_iter=1000)
 model.fit(X, df["career"])
 
-# ===================== MAP =====================
 career_required_skills = {
 "Data Scientist":["python","machine learning","data analysis","pandas","numpy"],
 "Data Analyst":["python","sql","excel","tableau"],
@@ -196,7 +217,6 @@ career_soft_skills = {
 "IoT Engineer":["problem solving","research"]
 }
 
-# ===================== SKILL EXTRACTION =====================
 def extract_skills(text, skill_list):
     text = text.lower()
     found = []
@@ -246,14 +266,106 @@ if uploaded_file:
     missing_tech = get_missing_skills(career_required_skills.get(top_career, []), found_tech)
     missing_soft = get_missing_skills(career_soft_skills.get(top_career, []), found_soft)
 
+    ats_score = round(calculate_ats_score(found_tech, found_soft, resume_text) / 10, 1)
+
     st.markdown("## Analysis Report")
 
-    st.markdown(f"<div class='card'><span class='title'>Name:</span><br><span class='text'>{name}</span></div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='card'><span class='title'>Technical Skills:</span><br>{create_tags(found_tech)}</div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='card'><span class='title'>Soft Skills:</span><br>{create_tags(found_soft)}</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='card'><span class='title'>Name:</span><br><span class='text'>{name}</span></div>",
+        unsafe_allow_html=True
+    )
 
-    career_list = "<br>".join([f"- {c}" for c,_ in top_5])
-    st.markdown(f"<div class='card'><span class='title'>Top Careers:</span><br><span class='text'>{career_list}</span></div>", unsafe_allow_html=True)
+    # ===================== ATS SCORE CARD =====================
+    components.html(f"""
+    <div style="
+        background:#1E1E1E;
+        padding:20px;
+        border-radius:10px;
+        margin-bottom:15px;
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        font-family:Arial;
+        color:white;
+    ">
+        <div>
+            <div style="
+                font-size:16px;
+                font-weight:bold;
+                color:#4CAF50;
+            ">
+                ATS Score
+            </div>
+
+            <h2 style="
+                margin-top:8px;
+                font-size:24px;
+                font-weight:bold;
+            ">
+                {ats_score}/10
+            </h2>
+        </div>
+
+        <div style="
+            width:85px;
+            height:85px;
+            position:relative;
+        ">
+            <canvas id="atsChart"></canvas>
+
+            <div style="
+                position:absolute;
+                top:50%;
+                left:50%;
+                transform:translate(-50%,-50%);
+                font-weight:bold;
+                font-size:12px;
+                color:white;
+            ">
+                {ats_score}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+    const ctx = document.getElementById('atsChart').getContext('2d');
+
+    new Chart(ctx, {{
+        type: 'doughnut',
+        data: {{
+            datasets: [{{
+                data: [{ats_score}, {10-ats_score}],
+                backgroundColor: ['#4CAF50', '#2A2F3A'],
+                borderWidth: 0
+            }}]
+        }},
+        options: {{
+            cutout: '75%',
+            plugins: {{
+                legend: {{ display:false }}
+            }}
+        }}
+    }});
+    </script>
+    """, height=140)
+
+    st.markdown(
+        f"<div class='card'><span class='title'>Technical Skills:</span><br>{create_tags(found_tech)}</div>",
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        f"<div class='card'><span class='title'>Soft Skills:</span><br>{create_tags(found_soft)}</div>",
+        unsafe_allow_html=True
+    )
+
+    career_list = "<br>".join([f"- {c}" for c, _ in top_5])
+
+    st.markdown(
+        f"<div class='card'><span class='title'>Top Careers:</span><br><span class='text'>{career_list}</span></div>",
+        unsafe_allow_html=True
+    )
 
     show_learning_section(missing_tech, "Missing Technical Skills")
     show_learning_section(missing_soft, "Missing Soft Skills")
