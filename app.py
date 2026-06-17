@@ -41,6 +41,19 @@ st.markdown("""
     font-size: 14px;
     margin: 3px;
 }
+
+[data-testid="stFileUploader"] button {
+    color: #111111 !important;
+    background-color: white !important;
+    font-weight: bold !important;
+    opacity: 1 !important;
+}
+
+[data-testid="stFileUploader"] svg {
+    color: #111111 !important;
+    fill: #111111 !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
