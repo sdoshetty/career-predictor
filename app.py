@@ -240,7 +240,28 @@ def extract_skills(text, skill_list):
 
 def get_missing_skills(required, found):
     return [s for s in required if s not in found] or ["None"]
+# ===================== RESUME VALIDATION =====================
+def is_resume(text):
+    text = text.lower()
 
+    keywords = [
+        "education",
+        "skills",
+        "experience",
+        "projects",
+        "internship",
+        "objective",
+        "summary",
+        "certification",
+        "technical skills"
+    ]
+
+    count = 0
+    for keyword in keywords:
+        if keyword in text:
+            count += 1
+
+    return count >= 3
 # ===================== FILE UPLOAD =====================
 uploaded_file = st.file_uploader("Upload Resume", type=["pdf","docx","txt"])
 
@@ -256,19 +277,34 @@ if uploaded_file:
             txt = page.extract_text()
             if txt:
                 resume_text += txt
+
     elif uploaded_file.name.endswith(".docx"):
         doc = docx.Document(uploaded_file)
         for para in doc.paragraphs:
             resume_text += para.text
+
     else:
         resume_text = uploaded_file.read().decode("utf-8")
 
-    words = resume_text.split()
-    name = (words[0] + " " + words[1]).title() if len(words) >= 2 else "Not Found"
+    # ===================== RESUME VALIDATION =====================
+    if not is_resume(resume_text):
+        st.error("❌ Invalid document. Please upload a valid resume.")
+        st.stop()
 
+    # ===================== NAME EXTRACTION =====================
+    lines = resume_text.splitlines()
+
+    name = "Not Found"
+
+    for line in lines:
+        line = line.strip()
+        if len(line.split()) >= 2:
+            name = line.title()
+            break
+
+    # ===================== SKILL EXTRACTION =====================
     found_tech = extract_skills(resume_text, technical_skills)
     found_soft = extract_skills(resume_text, soft_skills)
-
     vector = vectorizer.transform([" ".join(found_tech)])
     probs = model.predict_proba(vector)[0]
 
